@@ -1,0 +1,26 @@
+# SO / editores
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# Registros, copias y paquetes
+*.log
+*.bak
+*.orig
+*.tmp
+*.zip
+*.tar.gz
+
+# Dependencias y entorno
+node_modules/
+vendor/
+.env
+.env.*
+
+# Notas privadas de publicación
+PARA-PUBLICAR.md
+_scratch/

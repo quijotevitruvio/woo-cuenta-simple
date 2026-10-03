@@ -1,0 +1,595 @@
+/* Pa la wishlist — corazones y página de la lista.
+   --plw-accent: color de Ajustes; si no, contraste del tema. */
+:root {
+	--plw-c: var(--plw-accent, var(--wp--preset--color--contrast, #111));
+}
+
+/* ── Corazón ────────────────────────────────────────────────────────────── */
+.plw-heart {
+	border: 0;
+	background: transparent;
+	width: 26px;
+	height: 26px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	color: var(--plw-c);
+	padding: 0;
+	transition: transform 0.12s ease;
+	/* Halo sutil para que se lea sobre cualquier carátula, sin círculo. */
+	filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.9));
+}
+
+.plw-heart svg {
+	width: 17px;
+	height: 17px;
+}
+
+.plw-heart:hover {
+	transform: scale(1.12);
+}
+
+/* Sin elegir: corazón en línea. Elegido: 😍 reemplaza al corazón. */
+.plw-heart .plw-fill,
+.plw-heart .plw-emoji {
+	display: none;
+}
+
+.plw-heart .plw-emoji {
+	font-size: 19px;
+	line-height: 1;
+}
+
+.plw-heart.plw-on svg {
+	display: none;
+}
+
+.plw-heart.plw-on .plw-emoji {
+	display: block;
+}
+
+.plw-heart.plw-on {
+	animation: plw-pop 0.25s ease;
+}
+
+@keyframes plw-pop {
+	0% { transform: scale(1); }
+	50% { transform: scale(1.3); }
+	100% { transform: scale(1); }
+}
+
+/* En tarjetas: esquina superior derecha de la imagen. */
+li.product {
+	position: relative;
+}
+
+.plw-heart--loop {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	z-index: 5;
+}
+
+.lmc-card-media .plw-heart--loop {
+	top: 8px;
+	right: 8px;
+}
+
+/* En producto: corazón + texto, como el enlace de WPC que reemplaza. */
+.plw-single-wrap {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 8px 0;
+}
+
+.plw-heart--single {
+	background: transparent;
+	box-shadow: none;
+	width: 30px;
+	height: 30px;
+}
+
+.plw-single-label {
+	border: 0;
+	background: transparent;
+	color: var(--plw-c);
+	cursor: pointer;
+	font-size: 0.92em;
+	padding: 0;
+	text-decoration: none;
+}
+
+.plw-single-label:hover {
+	text-decoration: underline;
+}
+
+/* ── Menú del producto simple (Ver lista / Nueva / Quitar) ──────────────── */
+#plw-pop {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 99970;
+	display: flex;
+	flex-direction: column;
+	min-width: 230px;
+	background: var(--wp--preset--color--base, #fff);
+	border: 1px solid rgba(0, 0, 0, 0.12);
+	border-radius: 12px;
+	box-shadow: 0 8px 26px rgba(0, 0, 0, 0.18);
+	padding: 6px;
+}
+
+#plw-pop a,
+#plw-pop button {
+	display: block;
+	width: 100%;
+	text-align: left;
+	padding: 9px 12px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font-size: 0.88em;
+	cursor: pointer;
+	text-decoration: none;
+}
+
+#plw-pop a:hover,
+#plw-pop button:hover {
+	background: rgba(0, 0, 0, 0.06);
+}
+
+#plw-pop .plw-pop-sep {
+	display: block;
+	padding: 8px 12px 2px;
+	font-size: 0.72em;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	opacity: 0.55;
+	border-top: 1px solid rgba(0, 0, 0, 0.08);
+	margin-top: 4px;
+}
+
+#plw-pop button em {
+	font-style: normal;
+	opacity: 0.6;
+	font-size: 0.85em;
+}
+
+/* ── Página de listas (estilo Amazon: sidebar + contenido) ─────────────── */
+#plw-page {
+	display: flex;
+	gap: 28px;
+	align-items: flex-start;
+}
+
+#plw-sidebar {
+	flex: 0 0 230px;
+	position: sticky;
+	top: 20px;
+}
+
+#plw-sidebar h3 {
+	margin: 0 0 10px;
+	font-size: 1em;
+}
+
+#plw-lists {
+	list-style: none;
+	margin: 0 0 14px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.plw-list-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 9px 12px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	color: inherit;
+	font-size: 0.9em;
+	cursor: pointer;
+	text-align: left;
+}
+
+.plw-list-item:hover {
+	background: rgba(0, 0, 0, 0.05);
+}
+
+.plw-list-item.is-active {
+	background: var(--plw-c);
+	color: var(--plw-btn-text, #fff);
+	font-weight: 600;
+}
+
+.plw-list-item em {
+	font-style: normal;
+	font-size: 0.85em;
+	opacity: 0.7;
+}
+
+#plw-new {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+#plw-new-name {
+	padding: 8px 10px;
+	border: 1.5px solid rgba(0, 0, 0, 0.15);
+	border-radius: 9px;
+	font-size: 0.85em;
+}
+
+#plw-guest-cta {
+	font-size: 0.85em;
+	line-height: 1.5;
+	background: rgba(0, 0, 0, 0.04);
+	padding: 12px;
+	border-radius: 10px;
+}
+
+#plw-guest-cta a {
+	color: inherit;
+	text-decoration: none;
+}
+
+#plw-main {
+	flex: 1;
+	min-width: 0;
+}
+
+#plw-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-bottom: 14px;
+}
+
+#plw-title {
+	margin: 0;
+	font-size: 1.3em;
+}
+
+#plw-tools {
+	display: flex;
+	gap: 8px;
+}
+
+#plw-tools .plw-btn-ghost {
+	width: auto;
+	padding: 7px 13px;
+	font-size: 0.78rem;
+}
+
+.plw-danger {
+	opacity: 0.7;
+}
+
+#plw-share {
+	margin-bottom: 18px;
+}
+
+.plw-share-row {
+	display: flex;
+	gap: 8px;
+}
+
+#plw-share-url {
+	flex: 1;
+	padding: 9px 12px;
+	border: 1.5px solid rgba(0, 0, 0, 0.15);
+	border-radius: 9px;
+	font-size: 0.85em;
+}
+
+#plw-share-copy {
+	width: auto;
+}
+
+#plw-owner {
+	font-weight: 600;
+	margin-bottom: 16px;
+}
+
+/* Selector "Mover a…" en cada tarjeta. */
+.plw-move {
+	margin-top: 4px;
+	padding: 6px 8px;
+	border: 1.5px solid rgba(0, 0, 0, 0.15);
+	border-radius: 8px;
+	font-size: 0.78em;
+	background: var(--wp--preset--color--base, #fff);
+	color: inherit;
+}
+
+/* ── Toast (confirmación al marcar el corazón) ──────────────────────────── */
+#plw-toast {
+	position: fixed;
+	bottom: 24px;
+	left: 50%;
+	transform: translateX(-50%) translateY(16px);
+	z-index: 99980;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	background: #1a1a1a;
+	color: #fff;
+	padding: 12px 18px;
+	border-radius: 12px;
+	font-size: 0.88em;
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+	opacity: 0;
+	transition: opacity 0.2s ease, transform 0.2s ease;
+	max-width: 92vw;
+}
+
+#plw-toast.plw-toast-in {
+	opacity: 1;
+	transform: translateX(-50%) translateY(0);
+}
+
+#plw-toast a {
+	color: #fff;
+	font-weight: 700;
+	text-decoration: underline;
+	white-space: nowrap;
+}
+
+/* Con enlace: todo el toast es clicable. */
+#plw-toast.plw-toast-click {
+	cursor: pointer;
+}
+
+#plw-toast.plw-toast-click:hover {
+	background: #000;
+}
+
+/* Móvil: sidebar arriba, contenido abajo. */
+@media (max-width: 700px) {
+	#plw-page {
+		flex-direction: column;
+	}
+
+	#plw-sidebar {
+		position: static;
+		flex: none;
+		width: 100%;
+	}
+}
+
+.plw-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+	gap: 18px;
+}
+
+/* Tarjetas alineadas: misma altura, imagen con caja fija, título a máximo
+   2 líneas y el botón siempre pegado al fondo — las filas quedan parejas
+   aunque los títulos y carátulas midan distinto. */
+.plw-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	text-align: center;
+	height: 100%;
+}
+
+.plw-card > a {
+	color: inherit;
+	text-decoration: none;
+	display: flex;
+	flex-direction: column;
+}
+
+.plw-card img {
+	width: 100%;
+	aspect-ratio: 3 / 4;
+	object-fit: contain;
+	border-radius: 8px;
+}
+
+.plw-name {
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	min-height: 2.6em;
+	font-size: 0.88em;
+	font-weight: 600;
+	line-height: 1.3;
+	margin-top: 6px;
+}
+
+.plw-price {
+	font-size: 0.88em;
+	min-height: 1.3em;
+}
+
+/* El botón (o "Agotado") baja al fondo de la tarjeta. */
+.plw-card .plw-btn-primary,
+.plw-card .plw-btn-ghost,
+.plw-card .plw-out {
+	margin-top: auto;
+}
+
+.plw-out {
+	font-size: 0.82em;
+	opacity: 0.6;
+	text-decoration: line-through;
+	padding: 9px 0;
+}
+
+.plw-remove {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	z-index: 2;
+	width: 26px;
+	height: 26px;
+	border: 0;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	font-size: 15px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.plw-remove:hover {
+	background: var(--wp--preset--color--vivid-red, #cf2e2e);
+}
+
+/* Botones de la lista: el color sale de --plw-accent (Ajustes) o del
+   contraste del tema; --plw-btn-text fija el color del texto. */
+.plw-btn-primary,
+.plw-btn-ghost {
+	display: inline-block;
+	box-sizing: border-box;
+	width: 100%;
+	text-align: center;
+	/* !important: el tema estiliza los <a> tipo botón con su propio padding
+	   y radio; ambos botones deben medir EXACTAMENTE igual. */
+	padding: 9px 14px !important;
+	border-radius: 9px !important;
+	font-size: 0.85rem !important;
+	font-weight: 600;
+	line-height: 1.45 !important;
+	cursor: pointer;
+	text-decoration: none;
+	transition: opacity 0.15s ease;
+}
+
+.plw-btn-primary {
+	/* Borde del mismo grosor que el ghost (transparente no, del color):
+	   así los dos botones tienen la misma altura total. */
+	border: 1.5px solid var(--plw-c);
+	background: var(--plw-c);
+	color: var(--plw-btn-text, #fff) !important;
+}
+
+.plw-btn-primary:hover {
+	opacity: 0.85;
+}
+
+.plw-btn-primary:disabled {
+	opacity: 0.55;
+}
+
+.plw-btn-ghost {
+	border: 1.5px solid var(--plw-c);
+	color: var(--plw-c);
+	background: transparent;
+}
+
+.plw-btn-ghost:hover {
+	background: var(--plw-c);
+	color: var(--plw-btn-text, #fff);
+}
+
+/* "Agregar todo": ancho propio, no de columna completa. */
+#plw-add-all {
+	width: auto;
+	padding: 11px 26px;
+}
+
+#plw-actions {
+	margin-top: 24px;
+	text-align: center;
+}
+
+.plw-empty,
+.plw-loading {
+	text-align: center;
+	opacity: 0.7;
+	padding: 30px 0;
+}
+
+/* ── Contador ❤️N en el header ──────────────────────────────────────────── */
+#plw-head-chip {
+	display: inline-block;
+	margin-left: 8px;
+	padding: 2px 9px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.08);
+	font-size: 0.8em;
+	font-weight: 700;
+	text-decoration: none;
+	color: inherit;
+	vertical-align: middle;
+}
+
+#plw-head-chip:hover {
+	background: rgba(0, 0, 0, 0.15);
+}
+
+/* ── Notas por libro ────────────────────────────────────────────────────── */
+.plw-note {
+	font-size: 0.78em;
+	background: #fdf6e3;
+	border-radius: 8px;
+	padding: 5px 9px;
+	line-height: 1.35;
+}
+
+.plw-note-btn {
+	border: 0;
+	background: transparent;
+	color: inherit;
+	opacity: 0.55;
+	font-size: 0.76em;
+	cursor: pointer;
+	text-decoration: underline;
+	padding: 2px 0;
+}
+
+.plw-note-btn:hover {
+	opacity: 1;
+}
+
+/* ── Reserva de regalo (vista compartida) ───────────────────────────────── */
+.plw-gift {
+	font-size: 0.82em;
+}
+
+.plw-gift-mine {
+	border: 0;
+	background: #e6f6ec;
+	color: #1e7d3c;
+	border-radius: 9px;
+	padding: 8px 10px;
+	cursor: pointer;
+	font-size: 0.8em;
+	font-weight: 600;
+}
+
+.plw-gift-taken {
+	font-size: 0.8em;
+	background: rgba(0, 0, 0, 0.06);
+	border-radius: 9px;
+	padding: 8px 10px;
+	opacity: 0.75;
+}
+
+/* ── Toggle de alertas (sidebar) ────────────────────────────────────────── */
+#plw-alerts {
+	display: block;
+	margin-top: 16px;
+	font-size: 0.82em;
+	line-height: 1.4;
+	opacity: 0.85;
+	cursor: pointer;
+}
