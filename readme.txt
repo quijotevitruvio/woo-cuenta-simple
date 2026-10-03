@@ -6,7 +6,7 @@ Requires at least: 6.3
 Tested up to: 6.8
 Requires PHP: 7.4
 Requires Plugins: woocommerce
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -51,10 +51,16 @@ Pending.
 
 == Changelog ==
 
+= 1.0.1 =
+* Security: Google sign-in now binds to Google's stable `sub` identifier instead of the email address. An existing account with the same email and no linked Google identity is no longer opened automatically: the owner signs in once with the password and connects Google from the account details. Accounts created by Google sign-in are linked automatically on their next sign-in. Staff accounts (any role other than customer/subscriber, or any management capability) and accounts using 2FA never sign in through a social provider.
+
 = 1.0.0 =
 * First public release: single plugin with the three modules, settings for every store-specific value, hardened social sign-in and avatar upload, opt-in wishlist alerts.
 
 == Upgrade Notice ==
+
+= 1.0.1 =
+Security fix for social sign-in. Recommended for every site.
 
 = 1.0.0 =
 First public release.

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Woo Cuenta Simple
  * Description: La cuenta del cliente de WooCommerce en un solo plugin: entrar (correo, Google y opcionalmente Facebook / X), «Mi cuenta» con progreso de pedidos y lista de deseos con varias listas.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Andrés Valencia Tobón
  * Author URI: https://github.com/quijotevitruvio
  * License: GPL-2.0-or-later
@@ -30,7 +30,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'PA_CUENTA_VERSION', '1.0.0' );
+define( 'PA_CUENTA_VERSION', '1.0.1' );
 
 // WooCommerce: compatible con pedidos en tablas propias (HPOS).
 add_action( 'before_woocommerce_init', function () {

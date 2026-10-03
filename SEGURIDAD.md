@@ -1,8 +1,22 @@
-# Seguridad — Woo Cuenta Simple 1.0.0
+# Seguridad — Woo Cuenta Simple 1.0.1
 
 Revisión hecha antes de publicar (2026-10-03). Para reportar un problema de seguridad, abre un aviso privado en GitHub (Security → Report a vulnerability) en vez de un issue público.
 
-## Arreglado en esta versión
+## Arreglado en 1.0.1
+| Hallazgo | Archivo | Gravedad | Arreglo |
+|---|---|---|---|
+| Google abría una cuenta de cliente existente con solo coincidir el correo verificado, sin ningún vínculo previo (un correo reciclado o una cuenta de Google Workspace creada con ese correo bastaban). | `modulos/entrar/entrar.php` (`pent_rest_google`) | Alta | Vínculo por el `sub` de Google (`pent_google_sub`). Sin `sub` vinculado, la cuenta existente pide contraseña una vez y se conecta desde los detalles de la cuenta. |
+| Una cuenta del equipo con una red vinculada seguía entrando por esa red (el vínculo se miraba antes que los permisos). | `modulos/entrar/entrar.php` (Google, Facebook, X, `pent_login_and_redirect`) | Alta | `pent_social_login_allowed()`: el equipo y las cuentas con 2FA nunca entran ni vinculan por redes; comprobación también dentro de `pent_login_and_redirect`. |
+| `pent_is_privileged` solo miraba `edit_posts`, `manage_woocommerce` y `list_users`. | `modulos/entrar/entrar.php` | Media | Lista de roles permitidos (customer / subscriber) más capacidades de gestión; ante la duda, cuenta del equipo. |
+| Vincular Google con `link=1` sin sesión caía en el inicio de sesión. | `modulos/entrar/entrar.php` | Baja | Responde 401. |
+
+### Criterio de migración (cuentas que ya entraban con Google)
+Una cuenta sin `sub` se vincula sola en su primer acceso con Google solo si: la creó el propio acceso con Google (`pent_provider = google`); su dueño no desvinculó Google a propósito (`pent_google_unlinked`); el correo guardado de Google (si existe) o el de la cuenta coincide con el del token; no hay otro `sub` guardado; y no es del equipo ni usa 2FA. Ninguna cuenta queda sin salida: «¿Olvidaste la contraseña?» sigue en el formulario.
+
+### Riesgo residual
+- Facebook no informa si el correo está verificado: nunca abre cuentas existentes por correo, pero sí crea cuentas nuevas con el correo que entrega. Quien creara así una cuenta con un correo ajeno la perdería en cuanto el dueño real use «¿Olvidaste la contraseña?», aunque el vínculo de Facebook seguiría en esa cuenta hasta que se desconecte en los detalles de la cuenta.
+
+## Arreglado en 1.0.0
 | Hallazgo | Archivo | Gravedad | Arreglo |
 |---|---|---|---|
 | El acceso con Facebook abría una cuenta existente con solo coincidir el correo (Facebook no garantiza que esté verificado): toma de cuenta. | `modulos/entrar/entrar.php` (`pent_find_or_create_user`, `pent_facebook_cb`) | Alta (si Facebook está configurado) | Facebook / X nunca abren cuentas existentes por correo; solo por vínculo hecho con sesión desde «Detalles de la cuenta». |

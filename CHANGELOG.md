@@ -2,6 +2,14 @@
 
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Versionado semántico.
 
+## [1.0.1] - 2026-10-03
+### Seguridad
+- Google: la identidad es el `sub` estable de Google (meta `pent_google_sub`), no el correo. Una cuenta existente con ese correo y sin `sub` vinculado ya no se abre sola: se entra una vez con la contraseña y se conecta Google en los detalles de la cuenta (o se usa «¿Olvidaste la contraseña?»).
+- Migración: las cuentas creadas por el propio acceso con Google (`pent_provider = google`, sin desvincular, mismo correo) se vinculan solas en su siguiente acceso.
+- Cuentas del equipo (cualquier rol distinto de cliente/suscriptor o con capacidades de gestión) y cuentas con 2FA (Two Factor, WP 2FA o el filtro `pent_user_requires_2fa`): nunca entran por una red social, ni siquiera con vínculo previo, ni pueden vincular una.
+- Vincular Google sin sesión devuelve 401 (antes caía en el inicio de sesión).
+- Desvincular Google borra también el `sub` y desactiva la vinculación automática.
+
 ## [1.0.0] - 2026-10-03
 ### Añadido
 - Primera versión pública: un solo plugin (`woo-cuenta-simple/`) con tres módulos: Entrar, Lista de deseos y Mi cuenta.

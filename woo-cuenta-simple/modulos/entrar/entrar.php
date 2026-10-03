@@ -9,9 +9,12 @@
  * AJUSTES    Ajustes → Cuenta · Entrar (opción pent_options). Las claves se
  *            pueden fijar también con constantes en wp-config.php (ver README).
  * SEGURIDAD  El token de Google se verifica en el servidor (firma vía Google,
- *            aud, iss, exp y email_verified). Una cuenta existente NUNCA se
- *            abre por correo con un proveedor que no garantiza el correo
- *            (Facebook, X) ni si tiene permisos de edición/administración.
+ *            aud, iss, exp, sub y email_verified). La identidad de Google es
+ *            su `sub` (meta pent_google_sub), nunca el correo: una cuenta
+ *            existente con ese correo y sin `sub` entra una vez con contraseña
+ *            y conecta Google en los detalles de la cuenta (excepción: cuentas
+ *            creadas por el propio acceso con Google se vinculan solas). Las
+ *            cuentas del equipo y las que usan 2FA nunca entran por redes.
  * CÓMO SE APAGA  update_option( 'pa_cuenta_entrar_off', 1 );  (queda el
  *            formulario normal de WooCommerce en Mi cuenta).
  * CÓMO SE DESHACE  delete_option( 'pa_cuenta_entrar_off' );
@@ -24,7 +27,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'PENT_VERSION', '1.3.1' );
+define( 'PENT_VERSION', '1.4.0' );
 define( 'PENT_DIR', plugin_dir_path( __FILE__ ) );
 define( 'PENT_URL', plugin_dir_url( __FILE__ ) );
 
@@ -68,10 +71,46 @@ function pent_registration_allowed() {
 	return (bool) apply_filters( 'pent_registration_allowed', $allowed );
 }
 
-/** ¿El usuario tiene permisos por encima de cliente? (a esas cuentas no se entra por red social sin vínculo previo). */
+/**
+ * ¿Cuenta del equipo? Esas cuentas NUNCA entran por una red social (ni
+ * siquiera con vínculo): solo usuario y contraseña (y su 2FA, si lo hay).
+ * Se permite solo a quien tiene únicamente roles de lector (customer /
+ * subscriber, o ninguno) y ninguna capacidad de gestión. Ante la duda, true.
+ */
 function pent_is_privileged( $user ) {
-	$privileged = user_can( $user, 'edit_posts' ) || user_can( $user, 'manage_woocommerce' ) || user_can( $user, 'list_users' );
+	if ( ! ( $user instanceof WP_User ) || ! $user->ID ) {
+		return true;
+	}
+	$privileged = is_multisite() && is_super_admin( $user->ID );
+	$caps       = array( 'manage_options', 'manage_woocommerce', 'edit_others_posts', 'edit_users', 'promote_users', 'delete_users', 'list_users', 'edit_shop_orders', 'edit_posts', 'upload_files', 'unfiltered_html' );
+	foreach ( $caps as $cap ) {
+		if ( user_can( $user, $cap ) ) {
+			$privileged = true;
+		}
+	}
+	if ( array_diff( (array) $user->roles, array( 'customer', 'subscriber' ) ) ) {
+		$privileged = true;
+	}
 	return (bool) apply_filters( 'pent_is_privileged_user', $privileged, $user );
+}
+
+/** true = la cuenta usa segundo factor: no se salta con una red social. */
+function pent_user_has_2fa( $user ) {
+	if ( class_exists( 'Two_Factor_Core' ) && method_exists( 'Two_Factor_Core', 'is_user_using_two_factor' ) && Two_Factor_Core::is_user_using_two_factor( $user->ID ) ) {
+		return true;
+	}
+	if ( get_user_meta( $user->ID, 'wp_2fa_enabled_methods', true ) ) {
+		return true;
+	}
+	return (bool) apply_filters( 'pent_user_requires_2fa', false, $user );
+}
+
+/** true | WP_Error: ¿puede esta cuenta abrir sesión por una red social? */
+function pent_social_login_allowed( $user ) {
+	if ( pent_is_privileged( $user ) || pent_user_has_2fa( $user ) ) {
+		return new WP_Error( 'pent_staff', 'Por seguridad, esta cuenta entra solo con su usuario y contraseña.', array( 'status' => 403 ) );
+	}
+	return true;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -167,6 +206,10 @@ function pent_account_edit_url() {
 
 /** Abre sesión y redirige de vuelta a donde estaba el lector. */
 function pent_login_and_redirect( $user, $redirect = '' ) {
+	// Defensa en profundidad: solo lo llaman las redes sociales.
+	if ( true !== pent_social_login_allowed( $user ) ) {
+		wp_die( 'Por seguridad, esta cuenta entra solo con su usuario y contraseña. <a href="' . esc_url( wp_lostpassword_url() ) . '">¿Olvidaste la contraseña?</a>', '', array( 'response' => 403 ) );
+	}
 	wp_set_current_user( $user->ID );
 	wp_set_auth_cookie( $user->ID, true );
 	do_action( 'wp_login', $user->user_login, $user );
@@ -220,7 +263,7 @@ add_action( 'rest_api_init', function () {
 			$provider = sanitize_text_field( (string) $req->get_param( 'provider' ) );
 			$uid      = get_current_user_id();
 			$map      = array(
-				'google'   => array( 'pent_google_email', 'pent_google_name' ),
+				'google'   => array( 'pent_google_email', 'pent_google_name', 'pent_google_sub' ),
 				'facebook' => array( 'pent_fb_id', 'pent_fb_name' ),
 				'x'        => array( 'pent_x_id', 'pent_x_username' ),
 			);
@@ -229,6 +272,10 @@ add_action( 'rest_api_init', function () {
 			}
 			foreach ( $map[ $provider ] as $meta ) {
 				delete_user_meta( $uid, $meta );
+			}
+			// Desvincular a propósito apaga la vinculación automática de migración.
+			if ( 'google' === $provider ) {
+				update_user_meta( $uid, 'pent_google_unlinked', 1 );
 			}
 			return array( 'ok' => true );
 		},
@@ -283,14 +330,45 @@ function pent_rest_register( WP_REST_Request $req ) {
 	return array( 'ok' => true );
 }
 
-// ── Google: el botón GIS entrega un JWT; se verifica contra Google. ─────────
-// El endpoint tokeninfo de Google comprueba la firma y la caducidad; aquí se
-// exigen además aud (nuestro Client ID), iss (Google), exp y email_verified.
-function pent_rest_google( WP_REST_Request $req ) {
-	$opt        = pent_options();
-	$credential = (string) $req->get_param( 'credential' );
-	if ( ! $opt['google_id'] || ! $credential ) {
-		return new WP_Error( 'pent_google', 'Google Sign-In no está configurado.', array( 'status' => 400 ) );
+// ── Google: el botón GIS entrega un ID token (JWT). ─────────────────────────
+// Se verifica con el endpoint tokeninfo de Google (que comprueba la firma y
+// la vigencia) y además aquí: aud = Client ID, iss de Google, exp, sub y
+// email_verified. La identidad es el `sub`, nunca el correo.
+
+/** Claims válidos (array) o WP_Error. Pura: no toca la base de datos. */
+function pent_google_check_claims( $data, $client_id, $now = null ) {
+	$now = null === $now ? time() : (int) $now;
+	$bad = new WP_Error( 'pent_google', 'Token de Google inválido.', array( 'status' => 401 ) );
+	if ( ! is_array( $data ) || isset( $data['error'] ) || isset( $data['error_description'] ) ) {
+		return $bad;
+	}
+	if ( ! is_string( $client_id ) || '' === $client_id || ! isset( $data['aud'] ) || ! is_string( $data['aud'] ) || ! hash_equals( $client_id, $data['aud'] ) ) {
+		return $bad;
+	}
+	if ( ! isset( $data['iss'] ) || ! in_array( $data['iss'], array( 'accounts.google.com', 'https://accounts.google.com' ), true ) ) {
+		return $bad;
+	}
+	if ( ! isset( $data['exp'] ) || ! is_numeric( $data['exp'] ) || (int) $data['exp'] <= $now ) {
+		return $bad;
+	}
+	if ( empty( $data['sub'] ) || ! is_scalar( $data['sub'] ) || ! preg_match( '/^[0-9A-Za-z_-]{1,255}$/', (string) $data['sub'] ) ) {
+		return $bad;
+	}
+	$verified = $data['email_verified'] ?? '';
+	if ( empty( $data['email'] ) || ! is_string( $data['email'] ) || ! is_email( $data['email'] ) || ! ( true === $verified || 'true' === $verified ) ) {
+		return $bad;
+	}
+	return array(
+		'sub'   => (string) $data['sub'],
+		'email' => sanitize_email( $data['email'] ),
+		'name'  => isset( $data['name'] ) && is_string( $data['name'] ) ? sanitize_text_field( $data['name'] ) : '',
+	);
+}
+
+/** Pregunta a Google por el token. Claims válidos o WP_Error. */
+function pent_google_verify( $credential, $client_id ) {
+	if ( ! is_string( $credential ) || strlen( $credential ) > 8192 || ! preg_match( '/^[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+$/', $credential ) ) {
+		return new WP_Error( 'pent_google', 'Token de Google inválido.', array( 'status' => 401 ) );
 	}
 	$resp = wp_remote_get( 'https://oauth2.googleapis.com/tokeninfo?id_token=' . rawurlencode( $credential ), array( 'timeout' => 10 ) );
 	if ( is_wp_error( $resp ) ) {
@@ -299,36 +377,105 @@ function pent_rest_google( WP_REST_Request $req ) {
 	if ( 200 !== (int) wp_remote_retrieve_response_code( $resp ) ) {
 		return new WP_Error( 'pent_google', 'Token de Google inválido.', array( 'status' => 401 ) );
 	}
-	$data     = json_decode( wp_remote_retrieve_body( $resp ), true );
-	$data     = is_array( $data ) ? $data : array();
-	$iss_ok   = in_array( $data['iss'] ?? '', array( 'accounts.google.com', 'https://accounts.google.com' ), true );
-	$exp_ok   = isset( $data['exp'] ) && (int) $data['exp'] > time();
-	$verified = in_array( $data['email_verified'] ?? '', array( true, 'true' ), true );
-	if ( empty( $data['aud'] ) || ! hash_equals( (string) $opt['google_id'], (string) $data['aud'] ) || ! $iss_ok || ! $exp_ok || empty( $data['email'] ) || ! $verified ) {
-		return new WP_Error( 'pent_google', 'Token de Google inválido.', array( 'status' => 401 ) );
+	return pent_google_check_claims( json_decode( wp_remote_retrieve_body( $resp ), true ), $client_id );
+}
+
+/**
+ * Migración (criterio documentado en SEGURIDAD.md): una cuenta sin `sub`
+ * se vincula sola SOLO si la creó el propio inicio con Google
+ * (pent_provider = google), su dueño no desvinculó Google a propósito, el
+ * correo que guardamos de Google (si hay) es el mismo del token, y no es
+ * del equipo. Cualquier otra cuenta con ese correo entra con contraseña.
+ */
+function pent_google_can_migrate( $user, $email ) {
+	if ( 'google' !== get_user_meta( $user->ID, 'pent_provider', true ) ) {
+		return false;
 	}
-	$gmail = sanitize_email( $data['email'] );
+	if ( get_user_meta( $user->ID, 'pent_google_unlinked', true ) ) {
+		return false;
+	}
+	if ( '' !== (string) get_user_meta( $user->ID, 'pent_google_sub', true ) ) {
+		return false;
+	}
+	$stored = (string) get_user_meta( $user->ID, 'pent_google_email', true );
+	if ( '' !== $stored && 0 !== strcasecmp( $stored, $email ) ) {
+		return false;
+	}
+	return '' !== $stored || 0 === strcasecmp( (string) $user->user_email, $email );
+}
+
+/** Guarda la identidad de Google en la cuenta. */
+function pent_google_store( $uid, $claims ) {
+	update_user_meta( $uid, 'pent_google_sub', $claims['sub'] );
+	update_user_meta( $uid, 'pent_google_email', $claims['email'] );
+	if ( '' !== $claims['name'] ) {
+		update_user_meta( $uid, 'pent_google_name', $claims['name'] );
+	}
+	delete_user_meta( $uid, 'pent_google_unlinked' );
+}
+
+function pent_rest_google( WP_REST_Request $req ) {
+	$opt        = pent_options();
+	$credential = (string) $req->get_param( 'credential' );
+	if ( ! $opt['google_id'] || ! $credential ) {
+		return new WP_Error( 'pent_google', 'Google Sign-In no está configurado.', array( 'status' => 400 ) );
+	}
+	$claims = pent_google_verify( $credential, $opt['google_id'] );
+	if ( is_wp_error( $claims ) ) {
+		return $claims;
+	}
+	$owner = pent_find_user_by_meta( 'pent_google_sub', $claims['sub'] );
 
 	// Modo vínculo: lector con sesión conectando su Google desde Mis datos.
-	if ( $req->get_param( 'link' ) && is_user_logged_in() ) {
-		$dupe = pent_find_user_by_meta( 'pent_google_email', $gmail );
-		if ( $dupe && (int) $dupe->ID !== get_current_user_id() ) {
+	if ( $req->get_param( 'link' ) ) {
+		if ( ! is_user_logged_in() ) {
+			return new WP_Error( 'pent_google', 'Inicia sesión para conectar Google.', array( 'status' => 401 ) );
+		}
+		$me = wp_get_current_user();
+		if ( true !== pent_social_login_allowed( $me ) ) {
+			return new WP_Error( 'pent_staff', 'Las cuentas del equipo no se conectan a redes sociales: entran con contraseña.', array( 'status' => 403 ) );
+		}
+		if ( $owner && (int) $owner->ID !== (int) $me->ID ) {
 			return new WP_Error( 'pent_taken', 'Ese Google ya está vinculado a otra cuenta.', array( 'status' => 409 ) );
 		}
-		update_user_meta( get_current_user_id(), 'pent_google_email', $gmail );
-		update_user_meta( get_current_user_id(), 'pent_google_name', sanitize_text_field( $data['name'] ?? '' ) );
-		return array( 'linked' => true, 'email' => $gmail );
+		pent_google_store( $me->ID, $claims );
+		return array( 'linked' => true, 'email' => $claims['email'] );
 	}
 
-	// Login: primero por vínculo guardado, luego por email, luego se crea.
-	$user = pent_find_user_by_meta( 'pent_google_email', $gmail );
+	// Login 1: identidad ya vinculada (por `sub`).
+	$user = $owner;
+
+	// Login 2: cuenta con ese correo. Solo la de migración entra sola.
 	if ( ! $user ) {
-		$user = pent_find_or_create_user( $gmail, sanitize_text_field( $data['name'] ?? '' ), 'google', true );
+		$by_mail = get_user_by( 'email', $claims['email'] );
+		if ( ! $by_mail ) {
+			$by_mail = pent_find_user_by_meta( 'pent_google_email', $claims['email'] );
+		}
+		if ( $by_mail ) {
+			$ok = pent_social_login_allowed( $by_mail );
+			if ( true !== $ok ) {
+				return $ok;
+			}
+			if ( ! pent_google_can_migrate( $by_mail, $claims['email'] ) ) {
+				return new WP_Error( 'pent_google_password', 'Ya tienes una cuenta con ese correo. Entra una vez con tu contraseña y conecta Google en los detalles de tu cuenta. ¿No la recuerdas? Usa «¿Olvidaste la contraseña?».', array( 'status' => 409 ) );
+			}
+			$user = $by_mail;
+		}
 	}
-	if ( is_wp_error( $user ) ) {
-		return $user;
+
+	// Login 3: nadie tiene ese correo → cuenta nueva de cliente (correo verificado por Google; respeta «permitir crear cuentas»).
+	if ( ! $user ) {
+		$user = pent_find_or_create_user( $claims['email'], $claims['name'], 'google', false );
+		if ( is_wp_error( $user ) ) {
+			return $user;
+		}
 	}
-	update_user_meta( $user->ID, 'pent_google_email', $gmail );
+
+	$ok = pent_social_login_allowed( $user );
+	if ( true !== $ok ) {
+		return $ok;
+	}
+	pent_google_store( $user->ID, $claims );
 	wp_set_current_user( $user->ID );
 	wp_set_auth_cookie( $user->ID, true );
 	return array( 'ok' => true );
@@ -390,6 +537,10 @@ function pent_facebook_cb( WP_REST_Request $req ) {
 
 	// Modo vínculo: guardar la identidad en la cuenta y volver a Mis datos.
 	if ( ! empty( $saved['link'] ) ) {
+		if ( true !== pent_social_login_allowed( get_user_by( 'id', (int) $saved['link'] ) ) ) {
+			wp_safe_redirect( add_query_arg( 'pent_link_error', 'staff', pent_account_edit_url() ) );
+			exit;
+		}
 		$dupe = pent_find_user_by_meta( 'pent_fb_id', $me['id'] );
 		if ( $dupe && (int) $dupe->ID !== (int) $saved['link'] ) {
 			wp_safe_redirect( add_query_arg( 'pent_link_error', 'facebook', pent_account_edit_url() ) );
@@ -412,7 +563,11 @@ function pent_facebook_cb( WP_REST_Request $req ) {
 		$user = pent_find_or_create_user( sanitize_email( $me['email'] ), sanitize_text_field( $me['name'] ?? '' ), 'facebook', false );
 	}
 	if ( is_wp_error( $user ) ) {
-		wp_die( esc_html( $user->get_error_message() ) );
+		$err = $user->get_error_data();
+		wp_die( esc_html( $user->get_error_message() ), '', array( 'response' => (int) ( is_array( $err ) && isset( $err['status'] ) ? $err['status'] : 400 ) ) );
+	}
+	if ( true !== pent_social_login_allowed( $user ) ) {
+		wp_die( 'Por seguridad, esta cuenta entra solo con su usuario y contraseña. <a href="' . esc_url( wp_lostpassword_url() ) . '">¿Olvidaste la contraseña?</a>', '', array( 'response' => 403 ) );
 	}
 	update_user_meta( $user->ID, 'pent_fb_id', sanitize_text_field( $me['id'] ) );
 	update_user_meta( $user->ID, 'pent_fb_name', sanitize_text_field( $me['name'] ?? '' ) );
@@ -490,6 +645,10 @@ function pent_x_cb( WP_REST_Request $req ) {
 
 	// Modo vínculo: guardar la identidad y volver a Mis datos.
 	if ( ! empty( $saved['link'] ) ) {
+		if ( true !== pent_social_login_allowed( get_user_by( 'id', (int) $saved['link'] ) ) ) {
+			wp_safe_redirect( add_query_arg( 'pent_link_error', 'staff', pent_account_edit_url() ) );
+			exit;
+		}
 		$dupe = pent_find_user_by_meta( 'pent_x_id', $me['id'] );
 		if ( $dupe && (int) $dupe->ID !== (int) $saved['link'] ) {
 			wp_safe_redirect( add_query_arg( 'pent_link_error', 'x', pent_account_edit_url() ) );
@@ -509,7 +668,11 @@ function pent_x_cb( WP_REST_Request $req ) {
 		$user  = pent_find_or_create_user( $email, sanitize_text_field( $me['name'] ?? ( $me['username'] ?? 'Usuario de X' ) ), 'x', false );
 	}
 	if ( is_wp_error( $user ) ) {
-		wp_die( esc_html( $user->get_error_message() ) );
+		$err = $user->get_error_data();
+		wp_die( esc_html( $user->get_error_message() ), '', array( 'response' => (int) ( is_array( $err ) && isset( $err['status'] ) ? $err['status'] : 400 ) ) );
+	}
+	if ( true !== pent_social_login_allowed( $user ) ) {
+		wp_die( 'Por seguridad, esta cuenta entra solo con su usuario y contraseña. <a href="' . esc_url( wp_lostpassword_url() ) . '">¿Olvidaste la contraseña?</a>', '', array( 'response' => 403 ) );
 	}
 	update_user_meta( $user->ID, 'pent_x_id', sanitize_text_field( $me['id'] ) );
 	update_user_meta( $user->ID, 'pent_x_username', sanitize_text_field( $me['username'] ?? '' ) );
@@ -721,7 +884,9 @@ add_action( 'template_redirect', function () {
 	if ( isset( $_GET['pent_linked'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 		wc_add_notice( '¡Cuenta conectada! Ya puedes entrar con un clic.', 'success' );
 	}
-	if ( isset( $_GET['pent_link_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+	if ( isset( $_GET['pent_link_error'] ) && 'staff' === $_GET['pent_link_error'] ) { // phpcs:ignore WordPress.Security.NonceVerification
+		wc_add_notice( 'Las cuentas del equipo no se conectan a redes sociales: entran con contraseña.', 'error' );
+	} elseif ( isset( $_GET['pent_link_error'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 		wc_add_notice( 'Esa red ya está vinculada a otra cuenta de este sitio.', 'error' );
 	}
 } );
